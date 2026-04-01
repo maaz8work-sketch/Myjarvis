@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JARVIS — Personal AI Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;500;600&family=Fira+Code&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --cyan: #00d4ff;
+    --cyan10: rgba(0,212,255,0.10);
+    --cyan15: rgba(0,212,255,0.15);
+    --cyan20: rgba(0,212,255,0.20);
+    --cyan30: rgba(0,212,255,0.30);
+    --bg: #040810;
+    --bg2: rgba(4,12,30,0.95);
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --dim: #334155;
+  }
+
+  html, body {
+    height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Exo 2', sans-serif;
+    overflow: hidden;
+  }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--cyan20); border-radius: 4px; }
+
+  /* Animations */
+  @keyframes pulse  { 0%,100%{opacity:.3;transform:scale(.8)} 50%{opacity:1;transform:scale(1.1)} }
+  @keyframes glow   { 0%,100%{box-shadow:0 0 6px var(--cyan30)} 50%{box-shadow:0 0 22px rgba(0,212,255,.7)} }
+  @keyframes scanln { 0%{top:-2px} 100%{top:100vh} }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes spin   { to{transform:rotate(360deg)} }
+  @keyframes blink  { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  /* Layout */
+  #app { display:flex; height:100vh; width:100%; position:relative; overflow:hidden; }
+
+  /* BG grid */
+  #app::before {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      linear-gradient(rgba(0,212,255,.03) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(0,212,255,.03) 1px,transparent 1px);
+    background-size:40px 40px;
+  }
+
+  /* Scanline */
+  #scanline {
+    position:fixed; left:0; right:0; height:2px; z-index:1; pointer-events:none;
+    background:linear-gradient(transparent,rgba(0,212,255,.14),transparent);
+    animation: scanln 9s linear infinite;
+  }
+
+  /* ── SIDEBAR ───────────────────────────────────────────────────── */
+  #sidebar {
+    width:260px; min-width:260px;
+    background:var(--bg2);
+    border-right:1px solid rgba(0,212,255,.14);
+    display:flex; flex-direction:column;
+    overflow:hidden; z-index:10;
+    backdrop-filter:blur(12px);
+    transition:width .3s, min-width .3s;
+  }
+  #sidebar.collapsed { width:0; min-width:0; }
+
+  .sb-logo {
+    padding:18px 16px 12px;
+    border-bottom:1px solid rgba(0,212,255,.1);
+  }
+  .sb-logo-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .sb-icon {
+    width:38px; height:38px; border-radius:50%;
+    background:radial-gradient(circle,rgba(0,212,255,.25),transparent);
+    border:2px solid var(--cyan);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Orbitron'; font-size:16px; font-weight:900; color:var(--cyan);
+    animation:glow 3s ease infinite;
+    flex-shrink:0;
+  }
+  .sb-title { font-family:'Orbitron'; font-size:15px; font-weight:900; color:var(--cyan); letter-spacing:3px; }
+  .sb-sub   { font-size:10px; color:#475569; letter-spacing:2px; }
+  .sb-status {
+    font-size:10px; color:var(--cyan);
+    padding:4px 8px;
+    background:var(--cyan10);
+    border:1px solid rgba(0,212,255,.15);
+    border-radius:4px;
+    animation:blink 3s ease infinite;
+  }
+
+  /* Nav tabs */
+  .sb-tabs { display:flex; gap:6px; padding:12px 12px 0; }
+  .tab-btn {
+    flex:1; padding:7px 4px;
+    background:transparent; border:none; border-bottom:2px solid transparent;
+    color:#475569; cursor:pointer; font-size:11px;
+    font-family:'Exo 2'; font-weight:600;
+    text-transform:uppercase; letter-spacing:1px;
+    transition:all .2s;
+  }
+  .tab-btn.active { background:var(--cyan10); border-bottom:2px solid var(--cyan); color:var(--cyan); }
+
+  /* Sidebar content */
+  .sb-body { flex:1; overflow-y:auto; padding:12px; }
+
+  .sb-section-label {
+    font-size:10px; color:#475569; letter-spacing:2px;
+    margin-bottom:10px; margin-top:4px;
+  }
+
+  /* Quick action grid */
+  .qa-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .qa-btn {
+    padding:10px 6px; border-radius:8px; cursor:pointer;
+    background:var(--cyan10); border:1px solid rgba(0,212,255,.12);
+    color:#94a3b8; font-size:11px; font-family:'Exo 2';
+    text-align:center; line-height:1.3; transition:all .2s;
+  }
+  .qa-btn:hover { background:rgba(0,212,255,.18); color:var(--text); }
+  .qa-icon { font-size:18px; margin-bottom:3px; }
+
+  /* Suggestions */
+  .sugg-item {
+    padding:7px 10px; margin-bottom:5px;
+    background:rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.06);
+    border-radius:6px; cursor:pointer; font-size:11px; color:#64748b;
+    transition:all .2s;
+  }
+  .sugg-item:hover { background:var(--cyan10); color:#94a3b8; }
+
+  /* Memory box */
+  .memory-box {
+    margin-top:14px; padding:10px;
+    background:var(--cyan10); border-radius:8px;
+    border:1px solid rgba(0,212,255,.12);
+  }
+  .memory-label { font-size:10px; color:var(--cyan); letter-spacing:2px; margin-bottom:6px; }
+  .memory-fact  { font-size:11px; color:#64748b; }
+
+  /* Task manager */
+  .task-input-row { display:flex; gap:6px; margin-bottom:10px; }
+  .task-input {
+    flex:1; padding:8px 10px;
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(0,212,255,.2); border-radius:6px;
+    color:var(--text); font-size:12px; font-family:'Exo 2';
+  }
+  .task-add-btn {
+    padding:8px 12px; background:var(--cyan20);
+    border:1px solid var(--cyan30); border-radius:6px;
+    color:var(--cyan); cursor:pointer; font-size:16px;
+  }
+  .task-list { display:flex; flex-direction:column; gap:5px; }
+  .task-item {
+    display:flex; align-items:center; gap:8px; padding:8px 10px;
+    background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06);
+    border-radius:6px;
+  }
+  .task-cb {
+    width:16px; height:16px; border-radius:3px; flex-shrink:0;
+    border:2px solid #334155; background:transparent;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    transition:all .2s;
+  }
+  .task-cb.done { border-color:var(--cyan); background:var(--cyan20); }
+  .task-cb.done::after { content:'✓'; color:var(--cyan); font-size:10px; }
+  .task-text { flex:1; font-size:12px; color:#94a3b8; transition:all .2s; }
+  .task-text.done { color:#334155; text-decoration:line-through; }
+  .task-del {
+    background:none; border:none; color:#334155;
+    cursor:pointer; font-size:16px; line-height:1;
+    transition:color .2s;
+  }
+  .task-del:hover { color:#ef4444; }
+  .task-empty { color:#334155; font-size:12px; text-align:center; padding:20px 0; }
+  .task-count { margin-top:8px; font-size:11px; color:#475569; }
+
+  /* Notepad */
+  .notepad-ta {
+    width:100%; height:280px; padding:12px;
+    background:rgba(255,255,255,.03);
+    border:1px solid rgba(0,212,255,.15); border-radius:8px;
+    color:#94a3b8; font-size:12px; line-height:1.6;
+    font-family:'Exo 2'; resize:vertical;
+  }
+  .notepad-actions { margin-top:8px; display:flex; gap:6px; }
+  .notepad-ai-btn {
+    flex:1; padding:8px;
+    background:var(--cyan10); border:1px solid rgba(0,212,255,.2); border-radius:6px;
+    color:var(--cyan); cursor:pointer; font-size:11px; font-family:'Exo 2';
+    transition:all .2s;
+  }
+  .notepad-ai-btn:disabled { color:#334155; border-color:rgba(255,255,255,.06); cursor:not-allowed; background:transparent; }
+  .notepad-clear-btn {
+    padding:8px 12px; background:transparent;
+    border:1px solid rgba(255,255,255,.08); border-radius:6px;
+    color:#475569; cursor:pointer; font-size:11px;
+  }
+
+  /* Sidebar footer */
+  .sb-footer {
+    padding:10px 12px;
+    border-top:1px solid rgba(0,212,255,.1);
+  }
+  .sb-footer-row { display:flex; gap:6px; }
+  .sb-clear-btn {
+    flex:1; padding:8px; background:transparent;
+    border:1px solid rgba(255,255,255,.08); border-radius:6px;
+    color:#475569; cursor:pointer; font-size:11px; font-family:'Exo 2';
+    transition:all .2s;
+  }
+  .sb-clear-btn:hover { border-color:rgba(239,68,68,.4); color:#ef4444; }
+  .sb-search-btn {
+    padding:8px 10px; border-radius:6px; cursor:pointer; font-size:14px;
+    border:1px solid rgba(255,255,255,.08);
+    background:transparent; color:#475569; transition:all .2s;
+  }
+  .sb-search-btn.active { background:var(--cyan20); border-color:rgba(0,212,255,.4); color:var(--cyan); }
+  .sb-search-label { font-size:10px; color:var(--cyan); text-align:center; margin-top:6px; }
+
+  /* ── MAIN AREA ──────────────────────────────────────────────────── */
+  #main { flex:1; display:flex; flex-direction:column; z-index:5; min-width:0; }
+
+  /* Header */
+  #header {
+    padding:12px 20px;
+    border-bottom:1px solid rgba(0,212,255,.1);
+    background:rgba(4,12,30,.85);
+    backdrop-filter:blur(12px);
+    display:flex; align-items:center; gap:12px;
+    flex-shrink:0;
+  }
+  #menu-btn {
+    background:none; border:none; color:#475569;
+    cursor:pointer; font-size:18px; padding:4px;
+    transition:color .2s;
+  }
+  #menu-btn:hover { color:var(--cyan); }
+  #header-title { font-family:'Orbitron'; font-size:14px; color:var(--cyan); letter-spacing:2px; }
+  #header-sub   { font-size:11px; color:#334155; margin-top:1px; }
+  .traffic-lights { display:flex; gap:4px; margin-left:auto; }
+  .tl { width:10px; height:10px; border-radius:50%; }
+
+  /* Messages */
+  #messages {
+    flex:1; overflow-y:auto; padding:20px;
+    display:flex; flex-direction:column;
+  }
+
+  /* Welcome screen */
+  #welcome {
+    text-align:center; padding-top:50px;
+    animation:fadeUp .6s ease;
+  }
+  .welcome-icon {
+    width:80px; height:80px; margin:0 auto 18px;
+    border-radius:50%; border:2px solid rgba(0,212,255,.5);
+    display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(circle,rgba(0,212,255,.1),transparent);
+    animation:glow 3s ease infinite;
+    font-size:36px;
+  }
+  .welcome-title { font-family:'Orbitron'; font-size:24px; color:var(--cyan); letter-spacing:4px; margin-bottom:8px; }
+  .welcome-sub   { color:#475569; font-size:14px; margin-bottom:30px; }
+  .welcome-chips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-width:580px; margin:0 auto; }
+  .welcome-chip {
+    padding:10px 16px;
+    background:rgba(0,212,255,.06); border:1px solid rgba(0,212,255,.14);
+    border-radius:20px; color:#64748b; cursor:pointer; font-size:13px;
+    font-family:'Exo 2'; transition:all .2s;
+  }
+  .welcome-chip:hover { background:var(--cyan15); color:#94a3b8; }
+
+  /* Message rows */
+  .msg-row {
+    display:flex; gap:12px; margin-bottom:18px;
+    animation:fadeUp .3s ease;
+  }
+  .msg-row.user { flex-direction:row-reverse; }
+
+  .msg-avatar {
+    width:34px; height:34px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:700; font-family:'Orbitron';
+  }
+  .msg-avatar.user {
+    background:linear-gradient(135deg,#6366f1,#8b5cf6);
+    color:#fff;
+  }
+  .msg-avatar.bot {
+    background:radial-gradient(circle,rgba(0,212,255,.2),transparent);
+    border:1px solid rgba(0,212,255,.4);
+    color:var(--cyan);
+  }
+
+  .msg-bubble {
+    max-width:72%; padding:13px 17px;
+  }
+  .msg-bubble.user {
+    border-radius:18px 4px 18px 18px;
+    background:linear-gradient(135deg,rgba(99,102,241,.22),rgba(139,92,246,.18));
+    border:1px solid rgba(99,102,241,.28);
+  }
+  .msg-bubble.bot {
+    border-radius:4px 18px 18px 18px;
+    background:rgba(0,212,255,.04);
+    border:1px solid rgba(0,212,255,.12);
+  }
+
+  .msg-label {
+    font-size:10px; letter-spacing:1px; margin-bottom:6px;
+  }
+  .msg-label.user { color:#6366f1; }
+  .msg-label.bot  { color:var(--cyan); }
+
+  .msg-text { color:var(--text); line-height:1.65; }
+
+  /* Typing indicator */
+  #typing-row { display:flex; gap:12px; margin-bottom:18px; animation:fadeUp .3s ease; }
+  .typing-dot {
+    width:7px; height:7px; border-radius:50%;
+    background:var(--cyan); display:inline-block;
+  }
+  .typing-dot:nth-child(1) { animation:pulse 1.2s .0s ease-in-out infinite; }
+  .typing-dot:nth-child(2) { animation:pulse 1.2s .2s ease-in-out infinite; }
+  .typing-dot:nth-child(3) { animation:pulse 1.2s .4s ease-in-out infinite; }
+
+  /* Markdown styles */
+  .md h1 { color:var(--cyan); font-size:19px; font-weight:700; margin:14px 0 7px; font-family:'Orbitron'; letter-spacing:1px; }
+  .md h2 { color:#7dd3fc; font-size:16px; font-weight:600; margin:12px 0 5px; border-bottom:1px solid rgba(0,212,255,.18); padding-bottom:3px; }
+  .md h3 { color:#93c5fd; font-size:14px; font-weight:600; margin:9px 0 4px; }
+  .md p  { color:#cbd5e1; margin:4px 0; line-height:1.65; }
+  .md strong { color:#f1f5f9; font-weight:700; }
+  .md em     { color:#a5b4fc; font-style:italic; }
+  .md code   { background:rgba(0,212,255,.1); color:var(--cyan); padding:1px 5px; border-radius:4px; font-family:'Fira Code',monospace; font-size:.88em; }
+  .md pre    { background:#0a0f1e; border:1px solid rgba(0,212,255,.2); border-radius:8px; margin:10px 0; overflow:hidden; }
+  .md pre .pre-lang { padding:3px 12px; font-size:11px; color:var(--cyan); border-bottom:1px solid rgba(0,212,255,.15); font-family:monospace; }
+  .md pre code { background:transparent; padding:12px; display:block; color:#e2e8f0; font-size:13px; overflow-x:auto; border-radius:0; }
+  .md ul { margin:7px 0; padding-left:20px; list-style:none; }
+  .md ul li { color:#cbd5e1; margin-bottom:4px; padding-left:4px; position:relative; }
+  .md ul li::before { content:'›'; position:absolute; left:-15px; color:var(--cyan); }
+  .md ol { margin:7px 0; padding-left:22px; }
+  .md ol li { color:#cbd5e1; margin-bottom:4px; }
+  .md hr { border:none; border-top:1px solid rgba(0,212,255,.15); margin:10px 0; }
+
+  /* Input area */
+  #input-area {
+    padding:14px 20px;
+    background:rgba(4,12,30,.92);
+    border-top:1px solid rgba(0,212,255,.1);
+    backdrop-filter:blur(12px);
+    flex-shrink:0;
+  }
+  #input-box {
+    display:flex; gap:10px; align-items:flex-end;
+    background:rgba(255,255,255,.04);
+    border:1px solid rgba(0,212,255,.2);
+    border-radius:14px; padding:10px 14px;
+    transition:border-color .2s;
+  }
+  #input-box:focus-within { border-color:rgba(0,212,255,.5); }
+  #msg-input {
+    flex:1; background:transparent; border:none;
+    color:var(--text); font-size:14px; font-family:'Exo 2';
+    resize:none; line-height:1.5; max-height:120px; overflow-y:auto;
+    outline:none;
+  }
+  #msg-input::placeholder { color:#334155; }
+  #send-btn {
+    width:36px; height:36px; border-radius:10px; flex-shrink:0;
+    background:var(--cyan20); border:1px solid rgba(0,212,255,.45);
+    color:var(--cyan); cursor:pointer; font-size:17px;
+    display:flex; align-items:center; justify-content:center;
+    transition:all .2s;
+  }
+  #send-btn:disabled { background:rgba(255,255,255,.04); border-color:rgba(255,255,255,.08); color:#334155; cursor:not-allowed; }
+  #send-btn:not(:disabled):hover { background:rgba(0,212,255,.3); }
+  .send-spinner {
+    width:14px; height:14px; border:2px solid rgba(0,212,255,.3);
+    border-top-color:var(--cyan); border-radius:50%;
+    animation:spin .8s linear infinite;
+  }
+  #input-footer {
+    margin-top:7px; display:flex; justify-content:space-between;
+    font-size:11px; color:#1e293b;
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="scanline"></div>
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <!-- Logo -->
+    <div class="sb-logo">
+      <div class="sb-logo-row">
+        <div class="sb-icon">J</div>
+        <div>
+          <div class="sb-title">JARVIS</div>
+          <div class="sb-sub">AI LIFE ASSISTANT</div>
+        </div>
+      </div>
+      <div class="sb-status" id="status-bar">● JARVIS ONLINE — Ready to assist</div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="sb-tabs">
+      <button class="tab-btn active" data-tab="chat">💬 Chat</button>
+      <button class="tab-btn" data-tab="tasks">✅ Tasks</button>
+      <button class="tab-btn" data-tab="notes">📝 Notes</button>
+    </div>
+
+    <!-- Tab Bodies -->
+    <div class="sb-body">
+
+      <!-- CHAT TAB -->
+      <div id="tab-chat">
+        <div class="sb-section-label" style="margin-top:10px">QUICK ACTIONS</div>
+        <div class="qa-grid" id="qa-grid"></div>
+        <div class="sb-section-label" style="margin-top:16px">TRY ASKING</div>
+        <div id="suggestions"></div>
+        <div id="memory-box" class="memory-box" style="display:none">
+          <div class="memory-label">MEMORY</div>
+          <div id="memory-facts"></div>
+        </div>
+      </div>
+
+      <!-- TASKS TAB -->
+      <div id="tab-tasks" style="display:none">
+        <div class="sb-section-label" style="margin-top:10px">TASK MANAGER</div>
+        <div class="task-input-row">
+          <input class="task-input" id="task-input" placeholder="Add a task…" />
+          <button class="task-add-btn" id="task-add-btn">+</button>
+        </div>
+        <div class="task-list" id="task-list">
+          <div class="task-empty" id="task-empty">No tasks yet. Add one above or ask JARVIS!</div>
+        </div>
+        <div class="task-count" id="task-count" style="display:none"></div>
+      </div>
+
+      <!-- NOTES TAB -->
+      <div id="tab-notes" style="display:none">
+        <div class="sb-section-label" style="margin-top:10px">QUICK NOTEPAD</div>
+        <textarea class="notepad-ta" id="notepad" placeholder="Jot down anything here…"></textarea>
+        <div class="notepad-actions">
+          <button class="notepad-ai-btn" id="notepad-ai-btn" disabled>✨ Organize with AI</button>
+          <button class="notepad-clear-btn" id="notepad-clear-btn">Clear</button>
+        </div>
+      </div>
+
+    </div><!-- sb-body -->
+
+    <!-- Footer -->
+    <div class="sb-footer">
+      <div class="sb-footer-row">
+        <button class="sb-clear-btn" id="clear-btn">🗑 Clear Chat</button>
+        <button class="sb-search-btn" id="search-toggle-btn" title="Toggle web search">🌐</button>
+      </div>
+      <div id="search-label" style="display:none" class="sb-search-label">Web search ENABLED</div>
+    </div>
+  </div><!-- sidebar -->
+
+  <!-- MAIN -->
+  <div id="main">
+    <!-- Header -->
+    <div id="header">
+      <button id="menu-btn">☰</button>
+      <div>
+        <div id="header-title">JARVIS — Personal AI Agent</div>
+        <div id="header-sub">Start a conversation</div>
+      </div>
+      <div class="traffic-lights">
+        <div class="tl" style="background:#ff5f57"></div>
+        <div class="tl" style="background:#febc2e"></div>
+        <div class="tl" style="background:#28c840"></div>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div id="messages">
+      <div id="welcome">
+        <div class="welcome-icon">🤖</div>
+        <div class="welcome-title">JARVIS ONLINE</div>
+        <div class="welcome-sub">Your personal AI assistant. How can I help you today?</div>
+        <div class="welcome-chips" id="welcome-chips"></div>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div id="input-area">
+      <div id="input-box">
+        <textarea id="msg-input" rows="1" placeholder="Ask JARVIS anything… (Shift+Enter for newline)"></textarea>
+        <button id="send-btn" disabled>↑</button>
+      </div>
+      <div id="input-footer">
+        <span>Powered by Claude Sonnet · JARVIS v1.0</span>
+        <span>Enter to send · Shift+Enter for newline</span>
+      </div>
+    </div>
+  </div><!-- main -->
+</div><!-- app -->
+
+<script>
+"use strict";
+
+// ── Data ──────────────────────────────────────────────────────────────────
+const SYSTEM_PROMPT = `You are JARVIS — a personal AI life assistant. You are brilliant, concise, proactive, and deeply helpful. You adapt to the user's context, remember what they tell you, and complete tasks end-to-end.
+
+You help with:
+• Daily planning & scheduling — create schedules, set reminders, prioritize tasks
+• Writing & editing — emails, reports, essays, social posts, anything
+• Research & analysis — summarize topics, compare options, fact-check
+• Code & tech — debug, write, explain code in any language
+• Math & calculations — fast, accurate arithmetic and problem solving
+• Brainstorming — creative ideas, business strategies, product names
+• Life advice — productivity, health, finance, decisions
+• Learning — explain complex topics simply, create study plans
+
+Personality:
+• Concise but thorough — don't pad responses
+• Use markdown formatting (bold, bullets, headers, code blocks) to structure answers
+• Proactively suggest next steps
+• If you use web search, summarize findings clearly with key facts first
+• Address the user as "sir" or by name if they tell you
+
+Always end complex task responses with: **Next step:** [one actionable suggestion]`;
+
+const QUICK_ACTIONS = [
+  { icon:"📅", label:"Plan my day",   prompt:"Help me plan my day productively. Ask me what I need to accomplish today." },
+  { icon:"✉️", label:"Draft email",   prompt:"Help me write a professional email. Ask me who it's to and what it's about." },
+  { icon:"🧠", label:"Brainstorm",    prompt:"Let's brainstorm. Ask me what topic or problem I want to explore." },
+  { icon:"💻", label:"Debug code",    prompt:"I need help with my code. Ask me to share what I'm working on." },
+  { icon:"📊", label:"Research",      prompt:"I need to research something. Ask me what topic and search the web for the latest information." },
+  { icon:"💡", label:"Life advice",   prompt:"I need some advice. Ask me what's on my mind." },
+  { icon:"📝", label:"Summarize",     prompt:"I have something I need summarized. Ask me to paste the text or describe what I want summarized." },
+  { icon:"🎯", label:"Set goals",     prompt:"Help me set clear, actionable goals. Ask me what area of my life I want to improve." },
+];
+
+const SUGGESTED_PROMPTS = [
+  "What should I focus on to be more productive?",
+  "Write me a to-do list template for my morning routine",
+  "Explain quantum computing in simple terms",
+  "Help me write a LinkedIn post about my recent achievement",
+  "What are 5 ways to improve my sleep quality?",
+  "I need a workout plan for a busy professional",
+];
+
+// ── State ─────────────────────────────────────────────────────────────────
+const state = {
+  messages:   [],   // {role,content}[]
+  tasks:      [],   // {id,text,done}[]
+  memoryFacts:[],
+  useSearch:  false,
+  loading:    false,
+  msgCount:   0,
+};
+
+// ── DOM refs ──────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const sidebar       = $("sidebar");
+const statusBar     = $("status-bar");
+const messagesDiv   = $("messages");
+const welcome       = $("welcome");
+const welcomeChips  = $("welcome-chips");
+const headerSub     = $("header-sub");
+const msgInput      = $("msg-input");
+const sendBtn       = $("send-btn");
+const clearBtn      = $("clear-btn");
+const menuBtn       = $("menu-btn");
+const searchToggle  = $("search-toggle-btn");
+const searchLabel   = $("search-label");
+const taskInput     = $("task-input");
+const taskAddBtn    = $("task-add-btn");
+const taskList      = $("task-list");
+const taskEmpty     = $("task-empty");
+const taskCount     = $("task-count");
+const notepad       = $("notepad");
+const notepadAiBtn  = $("notepad-ai-btn");
+const notepadClear  = $("notepad-clear-btn");
+const memoryBox     = $("memory-box");
+const memoryFacts   = $("memory-facts");
+const qaGrid        = $("qa-grid");
+const suggestions   = $("suggestions");
+const tabChat       = $("tab-chat");
+const tabTasks      = $("tab-tasks");
+const tabNotes      = $("tab-notes");
+
+// ── Init UI ───────────────────────────────────────────────────────────────
+function init() {
+  // Quick actions
+  QUICK_ACTIONS.forEach(a => {
+    const btn = document.createElement("button");
+    btn.className = "qa-btn";
+    btn.innerHTML = `<div class="qa-icon">${a.icon}</div>${a.label}`;
+    btn.addEventListener("click", () => sendMessage(a.prompt));
+    qaGrid.appendChild(btn);
+  });
+
+  // Suggested prompts
+  SUGGESTED_PROMPTS.forEach(p => {
+    const div = document.createElement("div");
+    div.className = "sugg-item";
+    div.textContent = `"${p}"`;
+    div.addEventListener("click", () => sendMessage(p));
+    suggestions.appendChild(div);
+  });
+
+  // Welcome chips
+  QUICK_ACTIONS.forEach(a => {
+    const btn = document.createElement("button");
+    btn.className = "welcome-chip";
+    btn.textContent = `${a.icon} ${a.label}`;
+    btn.addEventListener("click", () => sendMessage(a.prompt));
+    welcomeChips.appendChild(btn);
+  });
+
+  // Tab switching
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+  });
+
+  // Sidebar toggle
+  menuBtn.addEventListener("click", () => {
+    sidebar.classList.toggle("collapsed");
+  });
+
+  // Search toggle
+  searchToggle.addEventListener("click", () => {
+    state.useSearch = !state.useSearch;
+    searchToggle.classList.toggle("active", state.useSearch);
+    searchLabel.style.display = state.useSearch ? "block" : "none";
+  });
+
+  // Clear chat
+  clearBtn.addEventListener("click", clearChat);
+
+  // Input events
+  msgInput.addEventListener("input", onInputChange);
+  msgInput.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!state.loading && msgInput.value.trim()) sendMessage();
+    }
+  });
+  sendBtn.addEventListener("click", () => sendMessage());
+
+  // Task manager
+  taskAddBtn.addEventListener("click", addTask);
+  taskInput.addEventListener("keydown", e => { if (e.key === "Enter") addTask(); });
+
+  // Notepad
+  notepad.addEventListener("input", () => {
+    notepadAiBtn.disabled = !notepad.value.trim();
+  });
+  notepadAiBtn.addEventListener("click", () => {
+    if (notepad.value.trim()) {
+      switchTab("chat");
+      sendMessage(`Please summarize and organize these notes into a clear, structured format:\n\n${notepad.value}`);
+    }
+  });
+  notepadClear.addEventListener("click", () => {
+    notepad.value = "";
+    notepadAiBtn.disabled = true;
+  });
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  tabChat.style.display  = tab === "chat"  ? "block" : "none";
+  tabTasks.style.display = tab === "tasks" ? "block" : "none";
+  tabNotes.style.display = tab === "notes" ? "block" : "none";
+}
+
+// ── Input auto-resize ─────────────────────────────────────────────────────
+function onInputChange() {
+  msgInput.style.height = "auto";
+  msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + "px";
+  sendBtn.disabled = !msgInput.value.trim() || state.loading;
+}
+
+// ── Memory extraction ─────────────────────────────────────────────────────
+function extractMemory(text) {
+  const patterns = [
+    /my name is ([A-Za-z]+)/i,
+    /call me ([A-Za-z]+)/i,
+    /i(?:'m| am) ([A-Za-z]+(?: [A-Za-z]+)?)/i,
+  ];
+  patterns.forEach(p => {
+    const m = text.match(p);
+    if (m && m[1] && !state.memoryFacts.find(f => f.includes(m[1]))) {
+      state.memoryFacts.push(`User's name: ${m[1]}`);
+      renderMemory();
+    }
+  });
+}
+
+function renderMemory() {
+  if (state.memoryFacts.length === 0) { memoryBox.style.display = "none"; return; }
+  memoryBox.style.display = "block";
+  memoryFacts.innerHTML = state.memoryFacts.map(f => `<div class="memory-fact">• ${escHtml(f)}</div>`).join("");
+}
+
+// ── API call ──────────────────────────────────────────────────────────────
+async function callJarvis(messages) {
+  const memCtx = state.memoryFacts.length
+    ? "\n\nKnown facts about user:\n" + state.memoryFacts.join("\n")
+    : "";
+
+  const body = {
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 1500,
+    system: SYSTEM_PROMPT + memCtx,
+    messages: messages,
+  };
+
+  if (state.useSearch) {
+    body.tools = [{ type: "web_search_20250305", name: "web_search" }];
+  }
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    let errMsg = `API error ${res.status}`;
+    try { const e = await res.json(); errMsg = e.error?.message || errMsg; } catch(_) {}
+    throw new Error(errMsg);
+  }
+
+  const data = await res.json();
+  return data.content
+    .filter(b => b.type === "text")
+    .map(b => b.text)
+    .join("\n")
+    .trim();
+}
+
+// ── Send message ──────────────────────────────────────────────────────────
+async function sendMessage(overrideText) {
+  const text = (overrideText || msgInput.value).trim();
+  if (!text || state.loading) return;
+
+  // Clear input
+  msgInput.value = "";
+  msgInput.style.height = "auto";
+  sendBtn.disabled = true;
+
+  extractMemory(text);
+
+  // Hide welcome
+  welcome.style.display = "none";
+
+  // Add user message
+  state.messages.push({ role: "user", content: text });
+  state.msgCount++;
+  appendMessage("user", text);
+  headerSub.textContent = `${state.msgCount} message${state.msgCount !== 1 ? "s" : ""}`;
+
+  // Show typing
+  state.loading = true;
+  setStatus("JARVIS THINKING…");
+  const typingEl = showTyping();
+
+  try {
+    const reply = await callJarvis(state.messages.map(m => ({ role: m.role, content: m.content })));
+    state.messages.push({ role: "assistant", content: reply });
+    state.msgCount++;
+    headerSub.textContent = `${state.msgCount} messages`;
+    removeTyping(typingEl);
+    appendMessage("bot", reply);
+    setStatus("JARVIS ONLINE — Ready to assist");
+  } catch (err) {
+    removeTyping(typingEl);
+    appendMessage("bot", `**System Error:** ${err.message}\n\nPlease check your connection and try again.`);
+    setStatus("ERROR — Check connection");
+  } finally {
+    state.loading = false;
+    sendBtn.disabled = !msgInput.value.trim();
+    msgInput.focus();
+  }
+}
+
+// ── DOM helpers ───────────────────────────────────────────────────────────
+function appendMessage(role, content) {
+  const row = document.createElement("div");
+  row.className = `msg-row ${role}`;
+
+  const avatar = document.createElement("div");
+  avatar.className = `msg-avatar ${role}`;
+  avatar.textContent = role === "user" ? "U" : "J";
+
+  const bubble = document.createElement("div");
+  bubble.className = `msg-bubble ${role}`;
+
+  const label = document.createElement("div");
+  label.className = `msg-label ${role}`;
+  label.textContent = role === "user" ? "YOU" : "JARVIS";
+
+  bubble.appendChild(label);
+
+  if (role === "user") {
+    const p = document.createElement("p");
+    p.className = "msg-text";
+    p.textContent = content;
+    bubble.appendChild(p);
+  } else {
+    const md = document.createElement("div");
+    md.className = "md";
+    md.innerHTML = parseMarkdown(content);
+    bubble.appendChild(md);
+  }
+
+  row.appendChild(avatar);
+  row.appendChild(bubble);
+  messagesDiv.appendChild(row);
+  scrollToBottom();
+}
+
+function showTyping() {
+  const row = document.createElement("div");
+  row.className = "msg-row";
+  row.id = "typing-row";
+
+  const avatar = document.createElement("div");
+  avatar.className = "msg-avatar bot";
+  avatar.textContent = "J";
+
+  const bubble = document.createElement("div");
+  bubble.className = "msg-bubble bot";
+
+  const label = document.createElement("div");
+  label.className = "msg-label bot";
+  label.textContent = "JARVIS";
+
+  const dots = document.createElement("div");
+  dots.style.cssText = "display:flex;gap:5px;align-items:center;padding:4px 0";
+  for (let i = 0; i < 3; i++) {
+    const d = document.createElement("div");
+    d.className = "typing-dot";
+    dots.appendChild(d);
+  }
+
+  bubble.appendChild(label);
+  bubble.appendChild(dots);
+  row.appendChild(avatar);
+  row.appendChild(bubble);
+  messagesDiv.appendChild(row);
+  scrollToBottom();
+  return row;
+}
+
+function removeTyping(el) {
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+}
+
+function scrollToBottom() {
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function setStatus(msg) {
+  statusBar.textContent = "● " + msg;
+}
+
+function clearChat() {
+  state.messages = [];
+  state.msgCount = 0;
+  // Remove all message rows
+  const rows = messagesDiv.querySelectorAll(".msg-row");
+  rows.forEach(r => r.remove());
+  welcome.style.display = "block";
+  headerSub.textContent = "Start a conversation";
+  setStatus("JARVIS ONLINE — New session started");
+}
+
+// ── Task manager ──────────────────────────────────────────────────────────
+function addTask() {
+  const text = taskInput.value.trim();
+  if (!text) return;
+  const task = { id: Date.now(), text, done: false };
+  state.tasks.push(task);
+  taskInput.value = "";
+  renderTasks();
+}
+
+function toggleTask(id) {
+  const t = state.tasks.find(t => t.id === id);
+  if (t) { t.done = !t.done; renderTasks(); }
+}
+
+function deleteTask(id) {
+  state.tasks = state.tasks.filter(t => t.id !== id);
+  renderTasks();
+}
+
+function renderTasks() {
+  // Remove existing task items (not empty message)
+  taskList.querySelectorAll(".task-item").forEach(el => el.remove());
+
+  if (state.tasks.length === 0) {
+    taskEmpty.style.display = "block";
+    taskCount.style.display = "none";
+    return;
+  }
+  taskEmpty.style.display = "none";
+
+  state.tasks.forEach(t => {
+    const item = document.createElement("div");
+    item.className = "task-item";
+
+    const cb = document.createElement("div");
+    cb.className = "task-cb" + (t.done ? " done" : "");
+    cb.addEventListener("click", () => toggleTask(t.id));
+
+    const span = document.createElement("span");
+    span.className = "task-text" + (t.done ? " done" : "");
+    span.textContent = t.text;
+
+    const del = document.createElement("button");
+    del.className = "task-del";
+    del.textContent = "×";
+    del.addEventListener("click", () => deleteTask(t.id));
+
+    item.appendChild(cb);
+    item.appendChild(span);
+    item.appendChild(del);
+    taskList.appendChild(item);
+  });
+
+  const done = state.tasks.filter(t => t.done).length;
+  taskCount.textContent = `${done}/${state.tasks.length} completed`;
+  taskCount.style.display = "block";
+}
+
+// ── Markdown parser ───────────────────────────────────────────────────────
+function escHtml(str) {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function inlineFormat(text) {
+  // Escape HTML first
+  let s = escHtml(text);
+  // Bold
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // Italic
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // Inline code
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  return s;
+}
+
+function parseMarkdown(text) {
+  const lines = text.split("\n");
+  let html = "";
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block
+    if (line.startsWith("```")) {
+      const lang = escHtml(line.slice(3).trim());
+      const codeLines = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith("```")) {
+        codeLines.push(escHtml(lines[i]));
+        i++;
+      }
+      html += `<pre>${lang ? `<div class="pre-lang">${lang}</div>` : ""}<code>${codeLines.join("\n")}</code></pre>`;
+      i++; continue;
+    }
+    // H1
+    if (line.startsWith("# ")) {
+      html += `<h1>${inlineFormat(line.slice(2))}</h1>`;
+      i++; continue;
+    }
+    // H2
+    if (line.startsWith("## ")) {
+      html += `<h2>${inlineFormat(line.slice(3))}</h2>`;
+      i++; continue;
+    }
+    // H3
+    if (line.startsWith("### ")) {
+      html += `<h3>${inlineFormat(line.slice(4))}</h3>`;
+      i++; continue;
+    }
+    // HR
+    if (line.match(/^---+$/)) {
+      html += "<hr>";
+      i++; continue;
+    }
+    // Unordered list
+    if (line.match(/^[-*•] /)) {
+      html += "<ul>";
+      while (i < lines.length && lines[i].match(/^[-*•] /)) {
+        html += `<li>${inlineFormat(lines[i].slice(2))}</li>`;
+        i++;
+      }
+      html += "</ul>";
+      continue;
+    }
+    // Ordered list
+    if (line.match(/^\d+\. /)) {
+      html += "<ol>";
+      while (i < lines.length && lines[i].match(/^\d+\. /)) {
+        html += `<li>${inlineFormat(lines[i].replace(/^\d+\. /, ""))}</li>`;
+        i++;
+      }
+      html += "</ol>";
+      continue;
+    }
+    // Blank line
+    if (line.trim() === "") {
+      i++; continue;
+    }
+    // Paragraph
+    html += `<p>${inlineFormat(line)}</p>`;
+    i++;
+  }
+
+  return html;
+}
+
+// ── Run ───────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
